@@ -2,7 +2,7 @@
 -- Segmented scenario library
 --
 -- After the Storm
--- Copyright (C) 2012 - 2021 by Iris Morelle <shadowm@wesnoth.org>
+-- Copyright (C) 2012 - 2023 by Iris Morelle <shadowm@wesnoth.org>
 --
 -- See COPYING for usage terms.
 --
@@ -20,8 +20,8 @@ end
 
 local function dispatch_floor_events(action)
 	wprintf(W_INFO, "dispatching floor events for action %s on floor %d", action, current_floor())
-	wesnoth.fire_event(("%s floor"):format(action))
-	wesnoth.fire_event(("%s floor %d"):format(action, current_floor()))
+	wesnoth.game_events.fire(("%s floor"):format(action))
+	wesnoth.game_events.fire(("%s floor %d"):format(action, current_floor()))
 end
 
 function wesnoth.wml_actions.change_floor(cfg)
@@ -30,7 +30,7 @@ function wesnoth.wml_actions.change_floor(cfg)
 	local new_floor_num = tonumber(cfg.floor_number or 0)
 
 	if not new_floor_num or new_floor_num > num_floors then
-		helper.wml_error(("Attempted to enter floor %d, which is out of range ([1..%d])"):format(new_floor_num, num_floors))
+		wml.error(("Attempted to enter floor %d, which is out of range ([1..%d])"):format(new_floor_num, num_floors))
 	end
 
 	local floor = wml.variables[("floor_config.floor[%d]"):format(new_floor_num - 1)]

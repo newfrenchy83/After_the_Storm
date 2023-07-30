@@ -9,7 +9,7 @@ local T = wml.tag
 ---
 function wesnoth.wml_actions.show_image(cfg)
 	local function do_error(msg)
-		helper.wml_error("[show_image]: " .. msg)
+		wml.error("[show_image]: " .. msg)
 	end
 
 	local img = cfg.image or do_error("required 'image' attribute is missing")
@@ -38,5 +38,5 @@ function wesnoth.wml_actions.show_image(cfg)
 		wesnoth.set_dialog_value(img, "image")
 	end
 
-	wesnoth.show_dialog(dd, preshow, nil)
+	gui.show_dialog(dd, preshow, nil)
 end

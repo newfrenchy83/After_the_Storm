@@ -26,13 +26,13 @@ end
 function wesnoth.wml_actions.s9_area_spawns(cfg)
 	local num_skels = cfg.skeletons or 1
 	local num_ghosts = cfg.ghosts or 1
-	local locs = wesnoth.get_locations(cfg)
+	local locs = wesnoth.map.find(cfg)
 
 	for i = 1, num_skels do
 		if #locs == 0 then
 			return
 		end
-		local r = helper.rand(("1..%d"):format(#locs))
+		local r = mathx.random_choice(("1..%d"):format(#locs))
 		local x, y = locs[r][1], locs[r][2]
 		spawn_loyal_player_unit("Skeleton", x, y)
 		table.remove(locs, r)
@@ -42,7 +42,7 @@ function wesnoth.wml_actions.s9_area_spawns(cfg)
 		if #locs == 0 then
 			return
 		end
-		local r = helper.rand(("1..%d"):format(#locs))
+		local r = mathx.random_choice(("1..%d"):format(#locs))
 		local x, y = locs[r][1], locs[r][2]
 		spawn_loyal_player_unit("Ghost", x, y)
 		table.remove(locs, r)
@@ -54,16 +54,16 @@ end
 -----------
 
 function wesnoth.wml_actions.animate_control_spires(cfg)
-	local units = wesnoth.get_units(cfg)
+	local units = wesnoth.units.find_on_map(cfg)
 
 	if not units then
 		return
 	end
 
-	local animator = wesnoth.create_animator()
+	local animator = wesnoth.units.create_animator()
 
 	for i, u in ipairs(units) do
-		local loc = wesnoth.get_locations({
+		local loc = wesnoth.map.find({
 			{ "filter_adjacent_location", {
 				x = u.x, y = u.y, adjacent = "-n"
 			}}
@@ -88,24 +88,24 @@ end
 
 function wesnoth.wml_actions.store_vacant_spawn_location(cfg)
 	local variable = cfg.variable or "location"
-	local direction = cfg.direction or helper.wml_error("[store_vacant_spawn_location]: Missing direction!")
+	local direction = cfg.direction or wml.error("[store_vacant_spawn_location]: Missing direction!")
 	local x = tonumber(cfg.x)
 	local y = tonumber(cfg.y)
 
 	if not (x and y) then
-		helper.wml_error("[store_vacant_spawn_location]: x,y must describe an on-map location!")
+		wml.error("[store_vacant_spawn_location]: x,y must describe an on-map location!")
 	end
 
 	local radius = tonumber(cfg.radius)
 
 	if not radius or radius < 1 then
-		helper.wml_error("[store_vacant_spawn_location]: Radius must be greater than 1!")
+		wml.error("[store_vacant_spawn_location]: Radius must be greater than 1!")
 	end
 
 	local w, h = wesnoth.get_map_size()
 
 	for k = 1, radius do
-		local loc = wesnoth.get_locations({
+		local loc = wesnoth.map.find({
 			-- On map.
 			x = ("1-%d"):format(w),
 			y = ("1-%d"):format(h),
@@ -143,8 +143,8 @@ function wesnoth.wml_actions.final_boss_hp_tint(cfg)
 	-- NOTE: This is not a SUF. In the future the id= attribute may have more
 	-- advanced semantics, different from an actual SUF.
 	local unit_id = cfg.id or
-		helper.wml_error("[screen_hp_tint]: No unit id specified")
-	local u = wesnoth.get_units({ id = unit_id })[1]
+		wml.error("[screen_hp_tint]: No unit id specified")
+	local u = wesnoth.units.find_on_map({ id = unit_id })[1]
 
 	if not u then
 		wprintf(W_WARN, "[screen_hp_tint]: Unit disappeared early?")
@@ -161,7 +161,7 @@ function wesnoth.wml_actions.final_boss_hp_tint(cfg)
 	--
 
 	local hp_ratio = u.hitpoints / u.max_hitpoints
-	local s = helper.round(-10 - 50 * (1.0 - hp_ratio))
+	local s = mathx.round(-10 - 50 * (1.0 - hp_ratio))
 
 	wprintf(W_DBG, "[screen_hp_tint] HP: %d/%d (%.1f) -> %d", u.hitpoints, u.max_hitpoints, hp_ratio, s)
 
@@ -177,10 +177,10 @@ function wesnoth.wml_actions.dreamwalk(cfg)
 	local map_w, map_h, map_b = wesnoth.get_map_size()
 
 	if dst_x <= 0 or dst_x > map_w or dst_y <= 0 or dst_y > map_h then
-		helper.wml_error("[marsap]: Destination invalid or out of map bounds!")
+		wml.error("[marsap]: Destination invalid or out of map bounds!")
 	end
 
-	local u = wesnoth.get_units(cfg)[1] or helper.wml_error("[marsap]: No matching units!")
+	local u = wesnoth.units.find_on_map(cfg)[1] or wml.error("[marsap]: No matching units!")
 
 	-- We use a fixed reach value for visibility calculation. It doesn't take
 	-- into account vision, jamming, or movement costs, but that's okay for our
@@ -189,19 +189,19 @@ function wesnoth.wml_actions.dreamwalk(cfg)
 
 	local src_x, src_y = u.x, u.y
 	if not src_x or not src_y then
-		helper.wml_error("[marsap]: Bad source location!")
+		wml.error("[marsap]: Bad source location!")
 	end
 
 	-- Compute a set of locations to remove shroud from so that we don't pass
 	-- the same coordinates more than once.
 	-- FIXME: Probably could optimize the radius search somehow.
 
-	local path = wesnoth.find_path(src_x, src_y, dst_x, dst_y)
+	local path = wesnoth.paths.find_path(src_x, src_y, dst_x, dst_y)
 	local region = location_set.of_pairs(path)
 	local rawsize = 0
 
 	for n, loc in ipairs(path) do
-		local subregion = wesnoth.get_locations { x = loc[1], y = loc[2], radius = reach }
+		local subregion = wesnoth.map.find { x = loc[1], y = loc[2], radius = reach }
 		region:union(location_set.of_pairs(subregion))
 		rawsize = rawsize + #subregion
 
@@ -238,13 +238,13 @@ end
 function wesnoth.wml_actions.push_units_away_from(cfg)
 	local center = { x = cfg.from_x, y = cfg.from_y }
 	if not center.x or not center.y then
-		helper.wml_error("[puaf]: Missing center coordinates")
+		wml.error("[puaf]: Missing center coordinates")
 	end
 
 	local suf = wml.get_child(cfg, "filter") or
-		helper.wml_error("[puaf]: Missing SUF")
+		wml.error("[puaf]: Missing SUF")
 
-	local units = wesnoth.get_units(suf)
+	local units = wesnoth.units.find_on_map(suf)
 
 	if not units then
 		wprintf(W_WARN, "[puaf]: No units matched SUF (???)")
@@ -259,7 +259,7 @@ function wesnoth.wml_actions.push_units_away_from(cfg)
 
 	local function unit_can_stand_on_location(pos, unit)
 		local new_pos = {0, 0}
-		new_pos[1], new_pos[2] = wesnoth.find_vacant_tile(pos[1], pos[2], unit)
+		new_pos[1], new_pos[2] = wesnoth.paths.find_vacant_hex(pos[1], pos[2], unit)
 		return new_pos[1] == pos[1] and new_pos[2] == pos[2]
 	end
 
@@ -270,8 +270,8 @@ function wesnoth.wml_actions.push_units_away_from(cfg)
 
 		if location_is_on_map(new_pos) and unit_can_stand_on_location(new_pos, u) then
 			-- NOTE: This is redundant but you can never be too safe, right?
-			if wesnoth.get_unit(new_pos[1], new_pos[2]) then
-				helper.wml_error("[puaf]: Wesnoth is on drugs, call an ambulance")
+			if wesnoth.units.get(new_pos[1], new_pos[2]) then
+				wml.error("[puaf]: Wesnoth is on drugs, call an ambulance")
 			end
 
 			wprintf(W_DBG, "[puaf]: Move unit %s -%s (%d,%d) -> (%d,%d)", u.id, dir, pos[1], pos[2], new_pos[1], new_pos[2])
@@ -291,18 +291,18 @@ function wesnoth.wml_actions.store_area_edge(cfg)
 	local variable= cfg.variable
 
 	if not cfg.x or not cfg.y or not cfg.radius or not cfg.variable then
-		helper.wml_error("[store_radius_edge] Missing required x=, y=, radius=, or variable= attribute")
+		wml.error("[store_radius_edge] Missing required x=, y=, radius=, or variable= attribute")
 	end
 
 	local location_set = wesnoth.require "lua/location_set.lua"
 
-	local locs1 = location_set.of_pairs(wesnoth.get_locations({
+	local locs1 = location_set.of_pairs(wesnoth.map.find({
 		x      = center_x,
 		y      = center_y,
 		radius = radius,
 	}))
 
-	local locs2 = location_set.of_pairs(wesnoth.get_locations({
+	local locs2 = location_set.of_pairs(wesnoth.map.find({
 		x      = center_x,
 		y      = center_y,
 		radius = radius - 1,
@@ -325,7 +325,7 @@ local function credits_alpha_print(text, size, alpha)
 	-- rendering onto a black screen, so we can just emulate it by adjusting
 	-- the color between #00 and #FFF procedurally
 
-	local c = helper.round(255 * alpha)
+	local c = mathx.round(255 * alpha)
 
 	--wesnoth.message(string.format("alpha %0.1f, step %d", alpha, c))
 
@@ -339,7 +339,7 @@ local function credits_alpha_print(text, size, alpha)
 	}
 
 	-- Don't let the game busy loop during fade-in/fade-out
-	wesnoth.delay(20)
+	wesnoth.interface.delay(20)
 end
 
 local function credits_single_block(title, body, duration, size)
@@ -369,14 +369,14 @@ local function credits_single_block(title, body, duration, size)
 	end
 
 	credits_alpha_print(text, size, 1.0)
-	wesnoth.delay(duration)
+	wesnoth.interface.delay(duration)
 
 	-- Fade out
 	for alpha = 1.0, 0.0, -0.1 do
 		credits_alpha_print(text, size, alpha)
 	end
 
-	wesnoth.delay(CREDITS_CONSECUTIVE_SCREENS_GAP_MS)
+	wesnoth.interface.delay(CREDITS_CONSECUTIVE_SCREENS_GAP_MS)
 end
 
 local function generate_empty_map(width, height)
@@ -394,7 +394,7 @@ local function generate_empty_map(width, height)
 end
 
 local function do_credits_error(message)
-	-- Do NOT use helper.wml_error here -- it causes the game to skip to E3S12
+	-- Do NOT use wml.error here -- it causes the game to skip to E3S12
 	-- directly due to the E3S11 event handling structure never giving the
 	-- game a chance to return control to the player. This results in a silent
 	-- failure that can come across as intentional behaviour.
@@ -434,13 +434,13 @@ function wesnoth.wml_actions.credits_sequence(cfg)
 
 	-- Start the actual credits display
 
-	local ms = wesnoth.get_time_stamp()
+	local ms = wesnoth.ms_since_init()
 
-	wesnoth.music_list.clear()
-	wesnoth.music_list.add("silence.ogg", true)
-	wesnoth.music_list.play(music)
+	wesnoth.audio.music_list.clear()
+	wesnoth.audio.music_list.add("silence.ogg", true)
+	wesnoth.audio.music_list.play(music)
 
-	wesnoth.delay(pre_wait)
+	wesnoth.interface.delay(pre_wait)
 
 	for section in wml.child_range(cfg, "section") do
 		-- we do allow nil for these two
@@ -492,10 +492,10 @@ function wesnoth.wml_actions.credits_sequence(cfg)
 		credits_single_block(title, body, duration)
 	end
 
-	ms = wesnoth.get_time_stamp() - ms
+	ms = wesnoth.ms_since_init() - ms
 	wprintf(W_DBG, "CREDITS: took %0.3f seconds", ms / 1000.0)
 
-	wesnoth.delay(post_wait)
+	wesnoth.interface.delay(post_wait)
 	wesnoth.wml_actions.fade_out_music { duration = music_fade_out }
 
 	-- In case there actually were units on the map at the start
@@ -507,7 +507,7 @@ end
 function wesnoth.wml_actions.dbg_test_variation(cfg)
 	local new_variation = cfg.variation_name
 
-	local units = wesnoth.get_units({ side=2, canrecruit=true })
+	local units = wesnoth.units.find_on_map({ side=2, canrecruit=true })
 	if not units then
 		return
 	end
@@ -536,14 +536,14 @@ local SUF_GHOST_UNITS = {
 }
 
 function wesnoth.wml_conditionals.player_ghost_limit_reached(cfg)
-	--if not wesnoth.get_unit("Zynara") then
+	--if not wesnoth.units.get("Zynara") then
 	--	return false
 	--end
 
-	local variable = cfg.variable or helper.wml_error("[cpgl] Missing required variable= attribute")
-	local limit = cfg.limit or helper.wml_error("[cpgl] Missing required limit= attribute")
+	local variable = cfg.variable or wml.error("[cpgl] Missing required variable= attribute")
+	local limit = cfg.limit or wml.error("[cpgl] Missing required limit= attribute")
 
-	local count = #wesnoth.get_units(SUF_GHOST_UNITS) + #wesnoth.get_recall_units(SUF_GHOST_UNITS)
+	local count = #wesnoth.units.find_on_map(SUF_GHOST_UNITS) + #wesnoth.units.find_on_recall(SUF_GHOST_UNITS)
 
 	wml.variables[variable] = count
 
@@ -551,26 +551,26 @@ function wesnoth.wml_conditionals.player_ghost_limit_reached(cfg)
 end
 
 local function random_map_location()
-	local locs = wesnoth.get_locations { include_borders = false }
-	local r = wesnoth.random(#locs)
+	local locs = wesnoth.map.find { include_borders = false }
+	local r = mathx.random(#locs)
 	return locs[r][1], locs[r][2]
 end
 
 function wesnoth.wml_actions.player_ghost_trap()
 	local wild_ghosts_side = wml.variables.wild_ghosts_side or 2
 
-	local recall_or_map = wesnoth.random(2)
+	local recall_or_map = mathx.random(2)
 
-	local on_map = wesnoth.get_units(SUF_GHOST_UNITS)
-	local off_map = wesnoth.get_recall_units(SUF_GHOST_UNITS)
+	local on_map = wesnoth.units.find_on_map(SUF_GHOST_UNITS)
+	local off_map = wesnoth.units.find_on_recall(SUF_GHOST_UNITS)
 
 	local r, u = 0, nil
 
 	if recall_or_map == 2 and #off_map > 0 then
-		r = wesnoth.random(#off_map) or helper.wml_error("[pgt] bad off-map selection")
+		r = mathx.random(#off_map) or wml.error("[pgt] bad off-map selection")
 		u = off_map[r]
 	else
-		r = wesnoth.random(#on_map) or helper.wml_error("[pgt] bad on-map selection")
+		r = mathx.random(#on_map) or wml.error("[pgt] bad on-map selection")
 		u = on_map[r]
 	end
 
@@ -584,7 +584,7 @@ function wesnoth.wml_actions.player_ghost_trap()
 		local recall_id = u.id
 
 		wesnoth.wml_actions.recall { id = recall_id, x = recall_x, y = recall_y, show = false }
-		wesnoth.get_unit(recall_id).side = wild_ghosts_side
+		wesnoth.units.get(recall_id).side = wild_ghosts_side
 	else
 		-- Transfer the unit to its new side at the end of the player's turn.
 		local T = wml.tag
@@ -626,10 +626,10 @@ function wesnoth.wml_actions.seismic_impact(cfg)
 	-- unit's lifespan.
 	--
 
-	local src = wesnoth.get_unit(ctx.x1, ctx.y1)
+	local src = wesnoth.units.get(ctx.x1, ctx.y1)
 	local src_atk = wml.get_child(ctx, "weapon")
 
-	local dst = wesnoth.get_unit(ctx.x2, ctx.y2)
+	local dst = wesnoth.units.get(ctx.x2, ctx.y2)
 	local dst_atk = wml.get_child(ctx, "second_weapon")
 
 	if src.variables.seismic_last_turn == wesnoth.current.turn then
@@ -642,7 +642,7 @@ function wesnoth.wml_actions.seismic_impact(cfg)
 
 	-- 25% chance to return true
 	local function confirm_status_inflict()
-		return helper.rand("A,A,A,A,B,B,B,B,C,C,C,C,D,D,D,D") == "A"
+		return mathx.random_choice("A,A,A,A,B,B,B,B,C,C,C,C,D,D,D,D") == "A"
 	end
 
 	local ui_sound_played = false
@@ -661,7 +661,7 @@ function wesnoth.wml_actions.seismic_impact(cfg)
 			status_changed = true
 		end
 
-		wesnoth.add_modification(u, "object", {
+		u:add_modification("object", {
 			id = "seismic_effect_obj",
 			take_only_once = false,
 			silent = true,
@@ -681,11 +681,11 @@ function wesnoth.wml_actions.seismic_impact(cfg)
 		-- happen (such as running into the concurrent sound samples limit)
 
 		if status_changed and not ui_sound_played then
-			wesnoth.play_sound("slowed.wav")
+			wesnoth.audio.play("slowed.wav")
 			ui_sound_played = true
 		end
 
-		wesnoth.float_label(u.x, u.y, ("<span foreground='#c4c480'>%s</span>"):format(_("seism")))
+		wesnoth.interface.float_label(u.x, u.y, ("<span foreground='#c4c480'>%s</span>"):format(_("seism")))
 	end
 
 
@@ -718,7 +718,7 @@ function wesnoth.wml_actions.seismic_impact(cfg)
 
 	-- Find additional targets
 
-	local splash_units = wesnoth.get_units {
+	local splash_units = wesnoth.units.find_on_map {
 		T.filter_adjacent { x = dst.x, y = dst.y },
 		T.filter_side { T.enemy_of { side = src.side } }
 	}
